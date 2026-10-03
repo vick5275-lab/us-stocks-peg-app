@@ -1,7 +1,6 @@
 import pandas as pd
 import streamlit as st
 
-# ตั้งค่าหน้าเว็บ
 st.set_page_config(
     page_title="US Stocks Forward PEG (2026)", page_icon="📈", layout="wide"
 )
@@ -12,38 +11,47 @@ st.write(
 )
 
 
-# โหลดข้อมูล CSV
 @st.cache_data
 def load_data():
-  df = pd.read_csv("us_stocks_final_peg.csv")
-  return df
+  return pd.read_csv("us_stocks_final_peg.csv")
 
 
 try:
   df = load_data()
 
-  # ตรวจสอบว่ามีข้อมูลไหม
   if df.empty:
     st.warning("ไม่พบข้อมูลในไฟล์ CSV")
   else:
-    # แสดงตัวกรองแถบคอลัมน์ด้านข้าง
     st.sidebar.header("🔍 ตัวกรองข้อมูล")
+
+    # เพิ่มช่องค้นหา Ticker หรือชื่อบริษัท
+    search_query = st.sidebar.text_input(
+        "ค้นหาตาม Ticker หรือชื่อบริษัท:", ""
+    ).upper()
+
     max_peg = st.sidebar.slider(
-        "กรองค่า Forward PEG สูงสุดไม่เกิน:",
-        0.0,
-        5.0,
-        2.0,
-        0.1,
+        "กรองค่า Forward PEG สูงสุดไม่เกิน:", 0.0, 5.0, 2.0, 0.1
     )
 
-    # กรองข้อมูลตาม PEG
-    if "Forward_PEG" in df.columns:
-      filtered_df = df[df["Forward_PEG"].notna() & (df["Forward_PEG"] <= max_peg)]
-      filtered_df = filtered_df.sort_values("Forward_PEG")
-    else:
-      filtered_df = df
+    filtered_df = df.copy()
 
-    # แสดงผลกราฟอันดับหุ้น Forward PEG ต่ำสุด
+    # กรองด้วยช่องค้นหา
+    if search_query:
+      filtered_df = filtered_df[
+          filtered_df["Ticker"].str.contains(search_query, na=False)
+          | filtered_df["Company"]
+          .str.upper()
+          .str.contains(search_query, na=False)
+      ]
+
+    # กรองด้วยค่า PEG
+    if "Forward_PEG" in filtered_df.columns:
+      filtered_df = filtered_df[
+          filtered_df["Forward_PEG"].notna()
+          & (filtered_df["Forward_PEG"] <= max_peg)
+      ]
+      filtered_df = filtered_df.sort_values("Forward_PEG")
+
     st.subheader("🏆 อันดับหุ้น Forward PEG ต่ำที่สุด (น่าสนใจ)")
     if not filtered_df.empty and "Forward_PEG" in filtered_df.columns:
       chart_data = filtered_df.head(10).set_index("Ticker")[
@@ -51,13 +59,11 @@ try:
       ]
       st.bar_chart(chart_data)
     else:
-      st.info("ไม่มีข้อมูลเพียงพอสำหรับแสดงกราฟ")
+      st.info("ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา")
 
-    # แสดงตารางข้อมูลทั้งหมด
     st.subheader("📋 ตารางข้อมูลหุ้นทั้งหมด")
     st.dataframe(filtered_df, use_container_width=True)
 
-    # ปุ่มดาวน์โหลด
     csv = filtered_df.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         label="📥 ดาวน์โหลดข้อมูลเป็น CSV",
@@ -68,6 +74,3 @@ try:
 
 except Exception as e:
   st.error(f"เกิดข้อผิดพลาดในการโหลดไฟล์: {e}")
-  st.info(
-      "กรุณาตรวจสอบว่าได้รันสคริปต์สร้างไฟล์ us_stocks_final_peg.csv เรียบร้อยแล้ว"
-  )

@@ -2,7 +2,7 @@ import pandas as pd
 import yfinance as yf
 
 # รายชื่อหุ้นตัวอย่างที่ต้องการดึงข้อมูล (คุณสามารถเปลี่ยนหรือเพิ่มรายชื่อหุ้นได้ตามต้องการ)
-tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AMD", "INTC", "QCOM"]
+tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AMD", "INTC", "QCOM", "VST", "VRT", "AVGO", "TSM", "MA", "SNPS", "CDNS", "SOFI", "FPS", "UNH", "PLTR", "CLPT", "ORCL", "BABA", "UBER", "COST", "FN", "AXON", "ISRG", "MELI"]
 
 data = []
 

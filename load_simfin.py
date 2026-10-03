@@ -19,7 +19,7 @@ print("กำลังโหลด Income Statements ของหุ้นสห
 # โหลดงบกำไรขาดทุนรายปี
 income = sf.load_income(
     variant="annual",
-    market="us"
+    market="us", refresh_days=1
 )
 
 print("\nโหลดข้อมูลสำเร็จ")

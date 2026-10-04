@@ -87,9 +87,6 @@ all_tickers = [
     "C",
     "AXP",
     "BLK",
-"HOOD",
-"MELI",
-"FICO",
     # Consumer & Healthcare
     "WMT",
     "PG",
@@ -110,8 +107,6 @@ all_tickers = [
     "MRK",
     "TMO",
     "AMGN",
-"TMDX",
-"TEM",
     # Energy & Industrials
     "XOM",
     "CVX",
@@ -127,18 +122,9 @@ all_tickers = [
     "GM",
     "FN",
     "SOFI",
-"VST",
-"CEG",
-"BE",
-#Space
-"SPCX",
-"ASTS",
-"RKLB",
-"PL",
-
 ]
 
-print(f"กำลังดึงข้อมูลหุ้นทั้งหมด {len(all_tickers)} ตัว...")
+print(f"กำลังดึงข้อมูลและอัปเดตสถิติหุ้นทั้งหมด {len(all_tickers)} ตัว...")
 
 data = []
 for ticker in all_tickers:
@@ -146,39 +132,67 @@ for ticker in all_tickers:
     stock = yf.Ticker(ticker)
     info = stock.info
 
+    # ดึงราคาปัจจุบัน
+    share_price = info.get("currentPrice") or info.get("regularMarketPrice")
+
+    # ดึงค่า Forward PE ตัวที่อัปเดตจาก info
     forward_pe = info.get("forwardPE")
-    # ดึงค่า PEG สำเร็จรูปจาก Yahoo Finance โดยตรง (ตรงกับหน้าเว็บหลัก)
-    peg = info.get("pegRatio")
 
-    # คำนวณอัตราการเติบโตย้อนกลับมาแสดงผล: Growth = Forward P/E / PEG
-    if forward_pe and peg and peg > 0:
-      growth_est = forward_pe / peg
-    else:
-      growth_est = None
+    # ดึงค่าประมาณการเติบโตระยะยาว (Growth Estimate) 3-5 ปี จาก analysts' estimate
+    # โดยลองดึงจากหลายฟิลด์ที่ Yahoo ใช้เก็บค่าคาดการณ์
+    growth_rate = None
+    
+    # พยายามดึงจากตาราง Analysis ถ้ามี
+    try:
+      analysis = stock.analysis
+      if analysis is not None and "Growth" in analysis.index:
+        growth_rate = analysis.loc["Growth"].iloc[
+            -1
+        ]  # ค่าเฉลี่ยคาดการณ์ล่าสุด
+    except:
+      pass
 
-    # หากหุ้นตัวไหนไม่มีค่า PEG สำเร็จรูป แต่มี Forward PE และ Growth ให้คำนวณสำรอง
-    if not peg and forward_pe:
-      growth_rate = info.get("growthEst") or info.get("earningsGrowth")
-      if growth_rate and growth_rate > 0:
-        g_percent = (
-            growth_rate * 100 if growth_rate < 1.0 else growth_rate
-        )
+    # ถ้าไม่มี ให้ดึงจาก info ฟิลด์สำรองที่มักตรงกับหน้าเว็บ
+    if not growth_rate or growth_rate == 0:
+      growth_rate = (
+          info.get("epsEstimateGrowth")
+          or info.get("growthEst")
+          or info.get("earningsGrowth")
+      )
+
+    # คำนวณค่า PEG สดๆ เพื่อความแม่นยำและสอดคล้อง
+    if forward_pe and growth_rate:
+      # แปลงสัดส่วนทศนิยมเป็นเปอร์เซ็นต์ (เช่น 0.248 -> 24.8 หรือถ้ามาเป็นเปอร์เซ็นต์อยู่แล้วให้ใช้เลย)
+      g_percent = (
+          growth_rate * 100 if abs(growth_rate) < 2.0 else growth_rate
+      )
+
+      if g_percent > 0:
         peg = forward_pe / g_percent
-        growth_est = g_percent
+      else:
+        peg = None
+    else:
+      peg = None
+      g_percent = None
 
-    if forward_pe and peg and peg > 0:
+    # กรณีที่คำนวณไม่ได้ ให้ลองดึง pegRatio สำเร็จรูปมาเป็นตัวสำรองสุดท้าย
+    if (not peg or peg <= 0) and forward_pe:
+      peg = info.get("pegRatio")
+      if peg and peg > 0 and forward_pe:
+        g_percent = forward_pe / peg
+
+    if forward_pe and peg and peg > 0 and g_percent:
       data.append({
           "Ticker": ticker,
           "Company": info.get("shortName", ticker),
-          "Share_Price": info.get("currentPrice")
-          or info.get("regularMarketPrice"),
+          "Share_Price": share_price,
           "Forward_PE": forward_pe,
-          "3-5Y_Growth_Est_%": growth_est,
+          "3-5Y_Growth_Est_%": g_percent,
           "Forward_PEG": peg,
       })
-      print(f"สำเร็จ: {ticker} (PEG: {peg})")
+      print(f"สำเร็จ: {ticker} (PE: {forward_pe}, PEG: {peg:.2f})")
     else:
-      print(f"ข้าม {ticker}: ข้อมูล PEG ไม่สมบูรณ์")
+      print(f"ข้าม {ticker}: ข้อมูลไม่สมบูรณ์")
   except Exception as e:
     print(f"ข้าม {ticker}: {e}")
 
@@ -187,7 +201,4 @@ df = df.drop_duplicates(subset=["Ticker"])
 df = df.dropna(subset=["Forward_PEG"])
 df.to_csv("us_stocks_final_peg.csv", index=False, encoding="utf-8-sig")
 
-print(
-    f"\nบันทึกข้อมูลเรียบร้อย! มีหุ้นที่ดึงค่า PEG สำเร็จรวมทั้งสิ้น {len(df)}"
-    " ตัว"
-)
+print(f"\nบันทึกข้อมูลเรียบร้อย! ข้อมูลพร้อมใช้งาน {len(df)} ตัว")

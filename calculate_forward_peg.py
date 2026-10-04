@@ -3,7 +3,7 @@ import yfinance as yf
 
 # รายชื่อหุ้นรวมกลุ่มเทคโนโลยี เซมิคอนดักเตอร์ และหุ้นยอดนิยมอื่นๆ (ไม่ให้มีชื่อซ้ำ)
 all_tickers = [
-   # Technology
+# Technology
     "AAPL",
     "MSFT",
     "NVDA",

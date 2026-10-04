@@ -1,7 +1,7 @@
 import pandas as pd
 import yfinance as yf
 
-# รายชื่อหุ้นยอดนิยมชุดใหญ่จาก S&P 500 และ Dow Jones ครอบคลุมทุก Sector
+# รายชื่อหุ้นยอดนิยมในพอร์ต
 all_tickers = [
     # Technology
     "AAPL",
@@ -170,9 +170,10 @@ all_tickers = [
 "FICO",
 "ASTS",
 "RKLB",
+
 ]
 
-print(f"กำลังดึงข้อมูล Forward PEG ของหุ้นจำนวน {len(all_tickers)} ตัว...")
+print(f"กำลังคำนวณ Forward PEG ด้วยอัตราเติบโตระยะยาว 3-5 ปี...")
 
 data = []
 for ticker in all_tickers:
@@ -181,12 +182,27 @@ for ticker in all_tickers:
     info = stock.info
 
     forward_pe = info.get("forwardPE")
-    growth_rate = info.get("earningsGrowth") or info.get("revenueGrowth")
 
+    # ดึงค่าอัตราการเติบโตคาดการณ์ระยะยาว (Long-term growth estimate 3-5 ปี)
+    # ถ้าไม่มี จะดึงค่า pegRatio สำเร็จรูปของ Yahoo มาช่วยเทียบเคียงสัดส่วน
+    growth_rate = info.get("growthEst")
+
+    if not growth_rate and "pegRatio" in info and info["pegRatio"] and forward_pe:
+      # คำนวณย้อนกลับจาก PEG สำเร็จรูปของ Yahoo หากไม่มีฟิลด์ Growth ตรงๆ
+      # PEG = Forward PE / Growth -> Growth = Forward PE / PEG
+      if info["pegRatio"] > 0:
+        growth_rate = forward_pe / info["pegRatio"]
+
+    # คำนวณค่า PEG ตามสูตร Peter Lynch (Forward PE หารด้วย Growth เปอร์เซ็นต์เต็ม)
     if forward_pe and growth_rate and growth_rate > 0:
-      peg = forward_pe / (growth_rate * 100)
+      # ปรับหน่วยให้เป็นเปอร์เซ็นต์เต็ม (เช่น 0.15 กลายเป็น 15)
+      g_percent = (
+          growth_rate * 100 if growth_rate < 1.0 else growth_rate
+      )  # ป้องกันกรณี API คืนค่าเป็นเปอร์เซ็นต์มาแล้ว
+      peg = forward_pe / g_percent
     else:
       peg = None
+      g_percent = None
 
     data.append({
         "Ticker": ticker,
@@ -194,7 +210,7 @@ for ticker in all_tickers:
         "Share_Price": info.get("currentPrice")
         or info.get("regularMarketPrice"),
         "Forward_PE": forward_pe,
-        "EPS_Growth_Est_%": growth_rate * 100 if growth_rate else None,
+        "3-5Y_Growth_Est_%": g_percent,
         "Forward_PEG": peg,
     })
     print(f"สำเร็จ: {ticker}")
@@ -205,6 +221,4 @@ df = pd.DataFrame(data)
 df = df.dropna(subset=["Forward_PEG"])
 df.to_csv("us_stocks_final_peg.csv", index=False, encoding="utf-8-sig")
 
-print(
-    f"\nบันทึกไฟล์สำเร็จ! มีหุ้นที่คำนวณ Forward PEG ได้ทั้งหมด {len(df)} ตัว"
-)
+print(f"\nบันทึกข้อมูลเรียบร้อย! มีหุ้นที่คำนวณสำเร็จ {len(df)} ตัว")

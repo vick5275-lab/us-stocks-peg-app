@@ -8,14 +8,50 @@ st.set_page_config(
 
 st.title("📈 วิเคราะห์หุ้นเติบโตด้วยค่า Forward PEG (ตามหลัก Peter Lynch)")
 st.write(
-    "ระบบกรองและวิเคราะห์หุ้นสหรัฐฯ ด้วย Forward P/E และอัตราการเติบโตระยะยาว"
+    "ระบบกรองและเปรียบเทียบหุ้นสหรัฐฯ พร้อมจำแนกตามกลุ่มอุตสาหกรรม"
 )
 
 
 # โหลดข้อมูล CSV
 @st.cache_data
 def load_data():
-  return pd.read_csv("us_stocks_final_peg.csv")
+  df = pd.read_csv("us_stocks_final_peg.csv")
+  # กำหนดกลุ่มอุตสาหกรรมคร่าวๆ เพื่อให้วิเคราะห์ง่ายขึ้น
+  semi_tickers = [
+      "NVDA",
+      "TSM",
+      "AVGO",
+      "MU",
+      "AMD",
+      "INTC",
+      "QCOM",
+      "ASML",
+      "ARM",
+      "TXN",
+      "MRVL",
+      "ADI",
+      "AMAT",
+      "LRCX",
+      "KLAC",
+      "NXPI",
+      "MCHP",
+      "ON",
+      "SWKS",
+      "QRVO",
+      "STM",
+  ]
+  big_tech = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NFLX", "ORCL"]
+
+  def categorize(ticker):
+    if ticker in semi_tickers:
+      return "Semiconductors & Chips"
+    elif ticker in big_tech:
+      return "Big Tech & Software"
+    else:
+      return "Other Sectors (Financial, Consumer, Health)"
+
+  df["Sector_Group"] = df["Ticker"].apply(categorize)
+  return df
 
 
 try:
@@ -26,27 +62,36 @@ try:
   else:
     st.sidebar.header("🔍 ตัวกรองข้อมูลขั้นสูง")
 
+    # ตัวกรองเลือกกลุ่มอุตสาหกรรม
+    selected_sector = st.sidebar.selectbox(
+        "เลือกกลุ่มอุตสาหกรรม:",
+        ["ทั้งหมด", "Semiconductors & Chips", "Big Tech & Software", "Other Sectors (Financial, Consumer, Health)"]
+    )
+
     # ช่องค้นหา Ticker หรือชื่อบริษัท
     search_query = st.sidebar.text_input(
         "ค้นหาตาม Ticker หรือชื่อบริษัท:", ""
     ).upper()
 
-    # ปรับปรุงตัวกรอง PEG ให้เลือกช่วงได้ (Min - Max)
+    # ตัวกรองช่วง Forward PEG
     st.sidebar.subheader("📌 ช่วงค่า Forward PEG")
     min_peg, max_peg = st.sidebar.slider(
-        "เลือกช่วง Forward PEG ที่ต้องการ:",
+        "เลือกช่วง Forward PEG:",
         0.0,
         5.0,
-        (0.0, 1.5),  # ค่าเริ่มต้นกำหนดให้กรองหุ้น PEG ไม่เกิน 1.5 (Undervalued)
+        (0.0, 2.0),
         0.05,
     )
 
-    # ปุ่มลัดเลือกสไตล์ Peter Lynch (PEG <= 1.0 ถือว่าน่าสนใจมาก)
     peter_lynch_mode = st.sidebar.checkbox(
         "💡 โหมด Peter Lynch เน้นหุ้น PEG <= 1.0 เท่านั้น"
     )
 
     filtered_df = df.copy()
+
+    # กรองตามกลุ่มอุตสาหกรรม
+    if selected_sector != "ทั้งหมด":
+      filtered_df = filtered_df[filtered_df["Sector_Group"] == selected_sector]
 
     # กรองด้วยช่องค้นหา
     if search_query:
@@ -70,23 +115,8 @@ try:
 
       filtered_df = filtered_df.sort_values("Forward_PEG")
 
-    # แสดงกราฟหุ้น Forward PEG ต่ำที่สุด 10 อันดับแรก
-    st.subheader(
-        f"🏆 อันดับหุ้น Forward PEG ต่ำที่สุด (ช่วง {min_peg} - {max_peg})"
-    )
-    if not filtered_df.empty and "Forward_PEG" in filtered_df.columns:
-      chart_data = (
-          filtered_df.head(10).set_index("Ticker")["Forward_PEG"].dropna()
-      )
-      if not chart_data.empty:
-        st.bar_chart(chart_data)
-      else:
-        st.info("ไม่มีข้อมูลกราฟในช่วงที่เลือก")
-    else:
-      st.info("ไม่พบหุ้นที่ตรงกับเงื่อนไขตัวกรองนี้ ลองขยายช่วง PEG ดูครับ")
-
-    # แสดงตารางข้อมูลทั้งหมด
-    st.subheader(f"📋 รายชื่อหุ้นเข้าเกณฑ์ ({len(filtered_df)} ตัว)")
+    # แสดงผล
+    st.subheader(f"📋 รายชื่อหุ้นในกลุ่ม: {selected_sector} ({len(filtered_df)} ตัว)")
     st.dataframe(
         filtered_df.style.format(
             {

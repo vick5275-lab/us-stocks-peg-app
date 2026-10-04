@@ -1,9 +1,9 @@
 import pandas as pd
 import yfinance as yf
 
-# รายชื่อหุ้นรวมกลุ่มเซมิคอนดักเตอร์, บิ๊กเทค, การเงิน, พลังงาน, ค้าปลีก และสุขภาพ
+# รายชื่อหุ้นครอบคลุมทุกกลุ่มอุตสาหกรรม
 all_tickers = [
-    # Semiconductors & Chip Giants
+    # Semiconductors & Chips
     "NVDA",
     "TSM",
     "AVGO",
@@ -25,8 +25,6 @@ all_tickers = [
     "SWKS",
     "QRVO",
     "STM",
-"DELL",
-"DY",
     # Big Tech & Software
     "AAPL",
     "MSFT",
@@ -42,61 +40,6 @@ all_tickers = [
     "UBER",
     "ABNB",
     "PLTR",
-"DDOG",
-    # Financials & Banking
-    "BRK-B",
-    "JPM",
-    "V",
-    "MA",
-    "BAC",
-    "WFC",
-    "GS",
-    "MS",
-    "C",
-    "AXP",
-    "BLK",
-"SOFI",
-"HOOD",
-"MELI",
-    # Consumer Discretionary & Staples
-    "WMT",
-    "PG",
-    "KO",
-    "PEP",
-    "COST",
-    "MCD",
-    "NKE",
-    "SBUX",
-    "TGT",
-    "HD",
-    "DIS",
-    "NFLX",
-    # Healthcare & Biotech
-    "JNJ",
-    "UNH",
-    "LLY",
-    "ABBV",
-    "PFE",
-    "MRK",
-    "TMO",
-    "AMGN",
-"UNH",
-"TMDX",
-"TEM",
-    # Energy & Industrials
-    "XOM",
-    "CVX",
-    "COP",
-    "SLB",
-    "CAT",
-    "DE",
-    "HON",
-    "UPS",
-    "BA",
-    "GE",
-    "F",
-    "GM",
-#Datacenter system
 "VRT",
 "VPG",
 "CRDO",
@@ -132,9 +75,70 @@ all_tickers = [
 "ROK",
 "SNDK",
 "ZS",
+    # Financials & Banking
+    "BRK-B",
+    "JPM",
+    "V",
+    "MA",
+    "BAC",
+    "WFC",
+    "GS",
+    "MS",
+    "C",
+    "AXP",
+    "BLK",
+"HOOD",
+"MELI",
+"FICO",
+    # Consumer & Healthcare
+    "WMT",
+    "PG",
+    "KO",
+    "PEP",
+    "COST",
+    "MCD",
+    "NKE",
+    "SBUX",
+    "TGT",
+    "HD",
+    "DIS",
+    "JNJ",
+    "UNH",
+    "LLY",
+    "ABBV",
+    "PFE",
+    "MRK",
+    "TMO",
+    "AMGN",
+"TMDX",
+"TEM",
+    # Energy & Industrials
+    "XOM",
+    "CVX",
+    "COP",
+    "SLB",
+    "CAT",
+    "DE",
+    "HON",
+    "UPS",
+    "BA",
+    "GE",
+    "F",
+    "GM",
+    "FN",
+    "SOFI",
+"VST",
+"CEG",
+"BE",
+#Space
+"SPCX",
+"ASTS",
+"RKLB",
+"PL",
+
 ]
 
-print(f"กำลังคำนวณ Forward PEG หุ้นทั้งหมด {len(all_tickers)} ตัว...")
+print(f"กำลังดึงข้อมูลหุ้นทั้งหมด {len(all_tickers)} ตัว...")
 
 data = []
 for ticker in all_tickers:
@@ -143,26 +147,38 @@ for ticker in all_tickers:
     info = stock.info
 
     forward_pe = info.get("forwardPE")
-    growth_rate = info.get("growthEst")
-    if not growth_rate:
-      growth_rate = info.get("earningsGrowth")
+    # ดึงค่า PEG สำเร็จรูปจาก Yahoo Finance โดยตรง (ตรงกับหน้าเว็บหลัก)
+    peg = info.get("pegRatio")
 
-    if forward_pe and growth_rate and growth_rate > 0:
-      g_percent = growth_rate * 100 if growth_rate < 1.0 else growth_rate
-      peg = forward_pe / g_percent
+    # คำนวณอัตราการเติบโตย้อนกลับมาแสดงผล: Growth = Forward P/E / PEG
+    if forward_pe and peg and peg > 0:
+      growth_est = forward_pe / peg
+    else:
+      growth_est = None
 
+    # หากหุ้นตัวไหนไม่มีค่า PEG สำเร็จรูป แต่มี Forward PE และ Growth ให้คำนวณสำรอง
+    if not peg and forward_pe:
+      growth_rate = info.get("growthEst") or info.get("earningsGrowth")
+      if growth_rate and growth_rate > 0:
+        g_percent = (
+            growth_rate * 100 if growth_rate < 1.0 else growth_rate
+        )
+        peg = forward_pe / g_percent
+        growth_est = g_percent
+
+    if forward_pe and peg and peg > 0:
       data.append({
           "Ticker": ticker,
           "Company": info.get("shortName", ticker),
           "Share_Price": info.get("currentPrice")
           or info.get("regularMarketPrice"),
           "Forward_PE": forward_pe,
-          "3-5Y_Growth_Est_%": g_percent,
+          "3-5Y_Growth_Est_%": growth_est,
           "Forward_PEG": peg,
       })
-      print(f"สำเร็จ: {ticker}")
+      print(f"สำเร็จ: {ticker} (PEG: {peg})")
     else:
-      print(f"ข้าม {ticker}: ข้อมูลไม่ครบถ้วน")
+      print(f"ข้าม {ticker}: ข้อมูล PEG ไม่สมบูรณ์")
   except Exception as e:
     print(f"ข้าม {ticker}: {e}")
 
@@ -171,4 +187,7 @@ df = df.drop_duplicates(subset=["Ticker"])
 df = df.dropna(subset=["Forward_PEG"])
 df.to_csv("us_stocks_final_peg.csv", index=False, encoding="utf-8-sig")
 
-print(f"\nบันทึกข้อมูลเรียบร้อย! คำนวณสำเร็จ {len(df)} ตัว")
+print(
+    f"\nบันทึกข้อมูลเรียบร้อย! มีหุ้นที่ดึงค่า PEG สำเร็จรวมทั้งสิ้น {len(df)}"
+    " ตัว"
+)
